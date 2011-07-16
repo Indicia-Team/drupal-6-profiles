@@ -100,6 +100,9 @@ function indicia_profile_tasks(&$task, $url) {
   
   // set the site home page
   variable_set('site_frontpage', 'instant-indicia-welcome');
+  
+  // remove the navigation menu, since admin_menu covers it
+  db_query("UPDATE {blocks} SET region='', status=0 WHERE module='user' AND delta='1'");
 }
 
 /**
