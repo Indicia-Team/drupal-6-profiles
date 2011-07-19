@@ -37,21 +37,9 @@ function indicia_profile_details() {
 }
 
 /**
- * Return a list of tasks that this profile supports.
- *
- * @return
- *   A keyed array of tasks the profile will perform during
- *   the final stage. The keys of the array will be used internally,
- *   while the values will be displayed to the user in the installer
- *   task list.
- */
-function indicia_profile_task_list() {
-}
-
-/**
  * Perform any final installation tasks for this profile.
  */
-function indicia_profile_tasks(&$task, $url) {
+function indicia_profile_drupal_tasks() {
 
   // Insert default user-defined node types into the database. For a complete
   // list of available node type attributes, refer to the node type API
@@ -90,9 +78,15 @@ function indicia_profile_tasks(&$task, $url) {
   variable_set('node_options_page', array('status'));
   variable_set('comment_page', COMMENT_NODE_DISABLED);
 
-  // Don't display date and author information for page nodes by default.
+  // update some theme settings
   $theme_settings = variable_get('theme_settings', array());
+  // Don't display date and author information for page nodes by default.
   $theme_settings['toggle_node_info_page'] = FALSE;
+  // turn on the site slogan
+  $theme_settings['toggle_slogan'] = TRUE;
+  // set the logo
+  $theme_settings['default_logo'] = FALSE;
+  $theme_settings['logo_path'] = 'sites/default/files/logo.png';
   variable_set('theme_settings', $theme_settings);
 
   // Update the menu router information.
@@ -105,41 +99,48 @@ function indicia_profile_tasks(&$task, $url) {
   db_query("UPDATE {blocks} SET region='', status=0 WHERE module='user' AND delta='1'");
 }
 
+function indicia_profile_task_list() {
+  return array('configure_indicia' => st('Configure Indicia'));
+}
+
+function indicia_profile_tasks(&$task, $url) {
+  if ($task=='profile') {
+    $task = 'configure_indicia';
+    indicia_profile_drupal_tasks();
+    drupal_set_title(st('Configure Indicia'));
+    require_once(drupal_get_path('module', 'iform').'/iform.admin.inc');
+    return drupal_get_form('iform_configuration_form', $url);
+  } else {
+    // The form was submitted, so now we advance to the next task.
+    $task = 'profile-finished';
+    // set the theme
+    variable_set('theme_default', 'framework');
+    // this forces newly added nodes to be immediately available
+    drupal_flush_all_caches();
+  }
+}
+
 /**
  * Implementation of hook_form_alter().
- *
- * Allows the profile to alter the site-configuration form. This is
- * called through custom invocation, so $form_state is not populated.
- * The site configuration form is also extended to allow the user to specify
- * the website ID and password for connecting to the warehouse.
+ * Updates the install configure form with a default site title.
  */
 function indicia_form_alter(&$form, $form_state, $form_id) {
   if ($form_id == 'install_configure') {
     // Set default for site name field.
-    $form['site_information']['site_name']['#default_value'] = $_SERVER['SERVER_NAME'];
-    // Add Indicia website configuration controls.
-    $form['indicia_config'] = array(
-      '#type' => 'fieldset',
-      '#title' => t('Indicia Configuration'),
-      '#weight' => 5,
-      '#collapsible' => TRUE,
-      '#collapsed' => FALSE,
-    );
-    $form['indicia_config']['indicia_website_id'] = array(
+    $form['site_information']['site_name']['#default_value'] = t('My Instant Indicia Site');    
+    $form['site_information']['site_slogan'] = array(
       '#type' => 'textfield',
-      '#title' => t('Indicia Website ID'),
-      '#description' => 'Please enter the ID given to your website record when your website was registered on the Indicia Warehouse.',
-      '#size' => 10,
-      '#maxlength' => 10,
-      '#required' => TRUE,
+      '#title' => t('Slogan'),
+      '#description' => t("Your site's motto, tag line, or catchphrase (often displayed alongside the title of the site).")
     );
-    $form['indicia_config']['indicia_password'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Indicia Website Password'),
-      '#description' => 'Please enter the password specified when your website was registered on the Indicia Warehouse.',
-      '#size' => 30,
-      '#maxlength' => 30,
-      '#required' => TRUE,
-    );
+    // add a form submit callback to store the additional site slogan. Also add the default handler otherwise
+    // Drupal seems to drop it - contrary to documentation
+    $form['#submit'][] = 'install_configure_form_submit';
+    $form['#submit'][] = 'indicia_profile_form_submit';
   }
 }
+
+function indicia_profile_form_submit($form, &$form_state) {
+  variable_set('site_slogan', $form_state['values']['site_slogan']);
+}
+
