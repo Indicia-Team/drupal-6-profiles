@@ -11,13 +11,13 @@ function indicia_profile_modules() {
     // standard Drupal install modules
     'color', 'comment', 'help', 'menu', 'taxonomy', 'dblog',
     // some additional generally handy modules
-    'admin_menu', 'path',
+    'admin_menu', 'path','search',
     // Modules required for an Indicia site
     'ckeditor', 'iform', 'jquery_ui', 'jquery_update', 'terms_of_use',
     // modules for feature support
     'features', 'uuid', 'uuid_features',
-    // enable welcome to instant indicia page
-    'indicia_welcome'
+    // enable some background settings plus welcome to instant indicia page
+    'indicia_quickstart', 'indicia_welcome'
   );
 }
 
@@ -40,6 +40,7 @@ function indicia_profile_details() {
  * Perform any final installation tasks for this profile.
  */
 function indicia_profile_drupal_tasks() {
+  // ** The following code is copied verbatim from the default Drupal profile
 
   // Insert default user-defined node types into the database. For a complete
   // list of available node type attributes, refer to the node type API
@@ -78,6 +79,18 @@ function indicia_profile_drupal_tasks() {
   variable_set('node_options_page', array('status'));
   variable_set('comment_page', COMMENT_NODE_DISABLED);
 
+  // Update the menu router information.
+  menu_rebuild();
+  
+  // set the site home page
+  variable_set('site_frontpage', 'instant-indicia-welcome');
+  
+  // remove the navigation menu, since admin_menu covers it
+  db_query("UPDATE {blocks} SET region='', status=0 WHERE module='user' AND delta='1'");
+  // ** end of verbatim block
+
+  // The following code is Indicia profile specific
+
   // update some theme settings
   $theme_settings = variable_get('theme_settings', array());
   // Don't display date and author information for page nodes by default.
@@ -88,15 +101,34 @@ function indicia_profile_drupal_tasks() {
   $theme_settings['default_logo'] = FALSE;
   $theme_settings['logo_path'] = 'sites/default/files/logo.png';
   variable_set('theme_settings', $theme_settings);
+  /* // create an admin role and site editor role
+  $role = array('name'=>'site editor');
+  drupal_write_record('role', $role);
+  // set default permissions for a site editor
+  $editor_perms = array(
+      'access administration menu',
+      'access ckeditor',
+      'administer comments',
+      'create page content',
+      'create story content',
+      'delete any page content',
+      'delete any story content',
+      'edit any page content',
+      'edit any story content',
+      'create url aliases'
+  );
+  $perm = array('rid' => $role['rid'], 'perm' => implode(', ', $editor_perms), 'tid' => 0);
+  drupal_write_record('permission', $perm);
+  $role = array('name'=>'admin user');
+  drupal_write_record('role', $role);
+  // build a list of all permissions an admin user should have
+  $admin_perms = array();
+  foreach (module_list(FALSE, FALSE, TRUE) as $module)
+    if ($permissions = module_invoke($module, 'perm'))
+      $admin_perms = array_merge($admin_perms, $permissions);
+  $perm = array('rid' => $role['rid'], 'perm' => implode(', ', $admin_perms), 'tid' => 0);
+  drupal_write_record('permission', $perm);*/
 
-  // Update the menu router information.
-  menu_rebuild();
-  
-  // set the site home page
-  variable_set('site_frontpage', 'instant-indicia-welcome');
-  
-  // remove the navigation menu, since admin_menu covers it
-  db_query("UPDATE {blocks} SET region='', status=0 WHERE module='user' AND delta='1'");
 }
 
 function indicia_profile_task_list() {
@@ -104,20 +136,40 @@ function indicia_profile_task_list() {
 }
 
 function indicia_profile_tasks(&$task, $url) {
+  require_once(drupal_get_path('module', 'iform').'/iform.admin.inc');
   if ($task=='profile') {
     $task = 'configure_indicia';
     indicia_profile_drupal_tasks();
-    drupal_set_title(st('Configure Indicia'));
-    require_once(drupal_get_path('module', 'iform').'/iform.admin.inc');
-    return drupal_get_form('iform_configuration_form', $url);
-  } else {
-    // The form was submitted, so now we advance to the next task.
-    $task = 'profile-finished';
-    // set the theme
-    variable_set('theme_default', 'framework');
-    // this forces newly added nodes to be immediately available
-    drupal_flush_all_caches();
   }
+  if ($task=='configure_indicia') {
+    $output = drupal_get_form('iform_configuration_form', $url, 'indicia_configuration_form_submit_proxy');
+    if (!variable_get('iform_config_submitted', false)) {
+      drupal_set_title(st('Configure Indicia'));
+      return $output;
+    } else {
+      variable_del('iform_config_submitted');
+      // The form was submitted, so now we advance to the next task.
+      $task = 'profile-finished';
+      // set the theme
+      variable_set('theme_default', 'framework');
+      // this forces newly added nodes to be immediately available
+      drupal_flush_all_caches();
+    }
+    
+  }
+}
+
+/**
+ * A method that passes the configuration form submit handler on after loading the
+ * correct admin.inc file, otherwise Drupal does not know where to get it as we are
+ * not running inside module code.
+ * @param <type> $form
+ * @param <type> $form_state
+ */
+function indicia_configuration_form_submit_proxy($form, &$form_state) {
+  variable_set('iform_config_submitted', true);
+  require_once(drupal_get_path('module', 'iform').'/iform.admin.inc');
+  indicia_configuration_form_submit($form, $form_state);
 }
 
 /**
@@ -135,8 +187,8 @@ function indicia_form_alter(&$form, $form_state, $form_id) {
     );
     // add a form submit callback to store the additional site slogan. Also add the default handler otherwise
     // Drupal seems to drop it - contrary to documentation
-    $form['#submit'][] = 'install_configure_form_submit';
     $form['#submit'][] = 'indicia_profile_form_submit';
+    $form['#submit'][] = 'install_configure_form_submit';
   }
 }
 
