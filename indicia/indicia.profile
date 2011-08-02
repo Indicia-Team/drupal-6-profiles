@@ -12,8 +12,8 @@ function indicia_profile_modules() {
     'color', 'comment', 'help', 'menu', 'taxonomy', 'dblog',
     // some additional generally handy modules
     'admin_menu', 'path','search',
-    // Modules required for an Indicia site
-    'ckeditor', 'iform', 'jquery_ui', 'jquery_update', 'terms_of_use',
+    // Modules handy for an Indicia site
+    'ckeditor', 'iform', 'jquery_ui', 'jquery_update', 'php', 'pathologic',
     // modules for feature support
     'features', 'uuid', 'uuid_features',
     // enable some background settings plus welcome to instant indicia page
@@ -82,9 +82,6 @@ function indicia_profile_drupal_tasks() {
   // Update the menu router information.
   menu_rebuild();
   
-  // set the site home page
-  variable_set('site_frontpage', 'instant-indicia-welcome');
-  
   // remove the navigation menu, since admin_menu covers it
   db_query("UPDATE {blocks} SET region='', status=0 WHERE module='user' AND delta='1'");
   // ** end of verbatim block
@@ -128,7 +125,33 @@ function indicia_profile_drupal_tasks() {
       $admin_perms = array_merge($admin_perms, $permissions);
   $perm = array('rid' => $role['rid'], 'perm' => implode(', ', $admin_perms), 'tid' => 0);
   drupal_write_record('permission', $perm);*/
+  if (file_exists(drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php')) {
+    //create an empty helper_config.php file
+    if (rename(drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php', drupal_get_path('module', 'iform').'/client_helpers/helper_config.php')) 
+      drupal_set_message(t('The file {file} is currently editable but should be made read only to improve security.', 
+          array('{file}'=>drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php')), 'warning');
+    else
+      drupal_set_message(t('The file {file} must be renamed to helper_config.php. Indicia does not have the required permissions to do this for you.', 
+          array('{file}'=>drupal_get_path('module', 'iform').'/client_helpers/helper_config.php')), 'warning');
+  }
+  indicia_profile_config_pathologic();
+}
 
+/**
+ * Setup the input filters required for pathologic to work for each of the 3 default input filters.
+ */
+function indicia_profile_config_pathologic() {
+  // first we ensure that pathologic can be the last filter run.
+  db_query('update {filter} set weight=9 where weight=10');
+  // setup filtered HTML
+  $filter = array('format'=>0, 'module'=>'pathologic','delta'=>0,'weight'=>10);
+  drupal_write_record('filter', $filter);
+  // setup full HTML
+  $filter = array('format'=>1, 'module'=>'pathologic','delta'=>0,'weight'=>10);
+  drupal_write_record('filter', $filter);
+  // setup PHP filter
+  $filter = array('format'=>2, 'module'=>'pathologic','delta'=>0,'weight'=>10);
+  drupal_write_record('filter', $filter);
 }
 
 function indicia_profile_task_list() {
@@ -136,13 +159,16 @@ function indicia_profile_task_list() {
 }
 
 function indicia_profile_tasks(&$task, $url) {
-  require_once(drupal_get_path('module', 'iform').'/iform.admin.inc');
   if ($task=='profile') {
     $task = 'configure_indicia';
     indicia_profile_drupal_tasks();
   }
   if ($task=='configure_indicia') {
+    require_once(drupal_get_path('module', 'iform').'/iform.admin.inc');
+    require_once(drupal_get_path('module', 'iform').'/iform.module');
     $output = drupal_get_form('iform_configuration_form', $url, 'indicia_configuration_form_submit_proxy');
+    require_once(drupal_get_path('module', 'iform').'/client_helpers/data_entry_helper.php');
+    handle_resources();
     if (!variable_get('iform_config_submitted', false)) {
       drupal_set_title(st('Configure Indicia'));
       return $output;
@@ -151,7 +177,7 @@ function indicia_profile_tasks(&$task, $url) {
       // The form was submitted, so now we advance to the next task.
       $task = 'profile-finished';
       // set the theme
-      variable_set('theme_default', 'framework');
+      variable_set('theme_default', 'instant_indicia');
       // this forces newly added nodes to be immediately available
       drupal_flush_all_caches();
     }
