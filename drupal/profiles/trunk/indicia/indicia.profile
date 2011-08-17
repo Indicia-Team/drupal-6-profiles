@@ -98,42 +98,6 @@ function indicia_profile_drupal_tasks() {
   $theme_settings['default_logo'] = FALSE;
   $theme_settings['logo_path'] = 'sites/default/files/logo.png';
   variable_set('theme_settings', $theme_settings);
-  /* // create an admin role and site editor role
-  $role = array('name'=>'site editor');
-  drupal_write_record('role', $role);
-  // set default permissions for a site editor
-  $editor_perms = array(
-      'access administration menu',
-      'access ckeditor',
-      'administer comments',
-      'create page content',
-      'create story content',
-      'delete any page content',
-      'delete any story content',
-      'edit any page content',
-      'edit any story content',
-      'create url aliases'
-  );
-  $perm = array('rid' => $role['rid'], 'perm' => implode(', ', $editor_perms), 'tid' => 0);
-  drupal_write_record('permission', $perm);
-  $role = array('name'=>'admin user');
-  drupal_write_record('role', $role);
-  // build a list of all permissions an admin user should have
-  $admin_perms = array();
-  foreach (module_list(FALSE, FALSE, TRUE) as $module)
-    if ($permissions = module_invoke($module, 'perm'))
-      $admin_perms = array_merge($admin_perms, $permissions);
-  $perm = array('rid' => $role['rid'], 'perm' => implode(', ', $admin_perms), 'tid' => 0);
-  drupal_write_record('permission', $perm);*/
-  if (file_exists(drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php')) {
-    //create an empty helper_config.php file
-    if (rename(drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php', drupal_get_path('module', 'iform').'/client_helpers/helper_config.php')) 
-      drupal_set_message(t('The file {file} is currently editable but should be made read only to improve security.', 
-          array('{file}'=>drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php')), 'warning');
-    else
-      drupal_set_message(t('The file {file} must be renamed to helper_config.php. Indicia does not have the required permissions to do this for you.', 
-          array('{file}'=>drupal_get_path('module', 'iform').'/client_helpers/helper_config.php')), 'warning');
-  }
   indicia_profile_config_pathologic();
 }
 
@@ -142,16 +106,16 @@ function indicia_profile_drupal_tasks() {
  */
 function indicia_profile_config_pathologic() {
   // first we ensure that pathologic can be the last filter run.
-  db_query('update {filter} set weight=9 where weight=10');
+  db_query('update {filters} set weight=9 where weight=10');
   // setup filtered HTML
-  $filter = array('format'=>0, 'module'=>'pathologic','delta'=>0,'weight'=>10);
-  drupal_write_record('filter', $filter);
-  // setup full HTML
   $filter = array('format'=>1, 'module'=>'pathologic','delta'=>0,'weight'=>10);
-  drupal_write_record('filter', $filter);
-  // setup PHP filter
+  drupal_write_record('filters', $filter);
+  // setup full HTML
   $filter = array('format'=>2, 'module'=>'pathologic','delta'=>0,'weight'=>10);
-  drupal_write_record('filter', $filter);
+  drupal_write_record('filters', $filter);
+  // setup PHP filter
+  $filter = array('format'=>3, 'module'=>'pathologic','delta'=>0,'weight'=>10);
+  drupal_write_record('filters', $filter);
 }
 
 function indicia_profile_task_list() {
@@ -215,6 +179,17 @@ function indicia_form_alter(&$form, $form_state, $form_id) {
     // Drupal seems to drop it - contrary to documentation
     $form['#submit'][] = 'indicia_profile_form_submit';
     $form['#submit'][] = 'install_configure_form_submit';
+  }
+  // At this point we can try to rename the _helper_config, giving the user a chance to manually do this before it is
+  // actually required and too late.
+  if (file_exists(drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php')) {
+    //create an empty helper_config.php file. Suppress warnings about permissions, since we check the result and handle it.
+    if (@rename(drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php', drupal_get_path('module', 'iform').'/client_helpers/helper_config.php')) 
+      drupal_set_message(t('The file {file} is currently editable but should be made read only to improve security.', 
+          array('{file}'=>drupal_get_path('module', 'iform').'/client_helpers/helper_config.php')), 'warning');
+    else
+      drupal_set_message(t('The file {file} must be renamed to helper_config.php. Indicia does not have the required permissions to do this for you.', 
+          array('{file}'=>drupal_get_path('module', 'iform').'/client_helpers/_helper_config.php')), 'error');
   }
 }
 
