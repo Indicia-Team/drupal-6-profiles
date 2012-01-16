@@ -131,7 +131,11 @@ function indicia_profile_tasks(&$task, $url) {
     require_once(drupal_get_path('module', 'iform').'/iform.admin.inc');
     require_once(drupal_get_path('module', 'iform').'/iform.module');
     $output = drupal_get_form('iform_configuration_form', $url, 'indicia_configuration_form_submit_proxy');
-    require_once(drupal_get_path('module', 'iform').'/client_helpers/data_entry_helper.php');
+    // client helpers can work if loaded from libraries or modules folder.
+    $path = drupal_get_path('module', 'iform').'/client_helpers/';
+    if (!is_dir($path))
+      $path = str_replace('modules', 'libraries', $path);
+    require_once($path.'data_entry_helper.php');
     handle_resources();
     if (!variable_get('iform_config_submitted', false)) {
       drupal_set_title(st('Configure Indicia'));
